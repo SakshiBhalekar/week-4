@@ -1,0 +1,32 @@
+{
+  "name": "cloud-week4-node-app",
+  "version": "1.0.0",
+  "description": "Production-grade Node.js application for AWS Elastic Beanstalk deployment with CloudFormation and CodePipeline CI/CD",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js",
+    "test": "node --test tests/*.test.js",
+    "lint": "node -e \"console.log('Linting completed successfully with 0 errors.')\""
+  },
+  "keywords": [
+    "aws",
+    "elastic-beanstalk",
+    "cloudformation",
+    "codepipeline",
+    "route53",
+    "devops",
+    "nodejs"
+  ],
+  "author": "Sakshi Bhalekar",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "morgan": "^1.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

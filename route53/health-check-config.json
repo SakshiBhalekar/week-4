@@ -1,0 +1,12 @@
+{
+  "Type": "HTTP",
+  "ResourcePath": "/health",
+  "FullyQualifiedDomainName": "api.sakshibhalekar.dev",
+  "Port": 80,
+  "RequestInterval": 30,
+  "FailureThreshold": 3,
+  "MeasureLatency": true,
+  "Inverted": false,
+  "Disabled": false,
+  "EnableSNI": false
+}

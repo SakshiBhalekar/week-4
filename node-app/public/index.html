@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Cloud Foundations | Week 4: Deployment & Automation</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="logo-icon">☁️</div>
+        <div>
+          <h1>AWS Cloud Foundations <span class="badge badge-accent">Week 4</span></h1>
+          <p class="subtitle">Deployment & Automation Architecture &bull; Author: <strong>Sakshi Bhalekar</strong></p>
+        </div>
+      </div>
+      <div class="header-badges">
+        <div class="status-indicator">
+          <span class="pulse-dot"></span>
+          <span id="headerStatusText">ALB: HEALTHY</span>
+        </div>
+        <div class="badge badge-purple" id="headerEnv">Production</div>
+      </div>
+    </header>
+
+    <!-- Hero / Architecture Overview -->
+    <section class="hero-card">
+      <div class="hero-content">
+        <h2>Enterprise Cloud Deployment & Automation</h2>
+        <p>Full-stack Node.js deployment orchestrated on <strong>AWS Elastic Beanstalk</strong>, provisioned via <strong>CloudFormation</strong> Infrastructure as Code, mapped through <strong>Amazon Route 53</strong> DNS, and automated with <strong>AWS CodePipeline</strong> CI/CD.</p>
+        
+        <div class="architecture-tags">
+          <span class="tag"><i class="tag-icon">⚡</i> AWS Elastic Beanstalk (PaaS)</span>
+          <span class="tag"><i class="tag-icon">📜</i> CloudFormation IaC</span>
+          <span class="tag"><i class="tag-icon">🌐</i> Route 53 DNS & Health Checks</span>
+          <span class="tag"><i class="tag-icon">🚀</i> CodePipeline & CodeBuild CI/CD</span>
+          <span class="tag"><i class="tag-icon">🛡️</i> ALB Auto Scaling (Multi-AZ)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Grid -->
+    <div class="dashboard-grid">
+      <!-- Card 1: Cloud & EC2 Metadata (IMDSv2) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">🖥️</span>
+            <h3>Compute & Infrastructure Telemetry</h3>
+          </div>
+          <button class="btn-sm" id="btnRefreshInfo" title="Refresh Telemetry">↻ Refresh</button>
+        </div>
+        <div class="card-body">
+          <div class="stat-row">
+            <span class="stat-label">Compute Target:</span>
+            <span class="stat-val font-mono" id="statCompute">AWS Elastic Beanstalk</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">EC2 Instance ID:</span>
+            <span class="stat-val font-mono text-cyan" id="statInstanceId">Detecting...</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Availability Zone:</span>
+            <span class="stat-val font-mono" id="statAz">Detecting...</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Private IPv4:</span>
+            <span class="stat-val font-mono" id="statPrivateIp">Detecting...</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Instance Type:</span>
+            <span class="stat-val font-mono" id="statInstanceType">Detecting...</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Operating System:</span>
+            <span class="stat-val font-mono" id="statOs">Loading...</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Node.js Runtime:</span>
+            <span class="stat-val font-mono text-green" id="statNodeVersion">Loading...</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Memory Utilization:</span>
+            <span class="stat-val font-mono" id="statMemory">Loading...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: ALB & Route 53 Health Status -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">🩺</span>
+            <h3>Health Check & Routing Diagnostics</h3>
+          </div>
+          <span class="badge badge-green" id="badgeHealth">HTTP 200 OK</span>
+        </div>
+        <div class="card-body">
+          <div class="stat-row">
+            <span class="stat-label">Health Endpoint:</span>
+            <span class="stat-val font-mono text-accent">/health</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Target Group State:</span>
+            <span class="stat-val font-mono text-green" id="statTgStatus">Healthy (2/2 Passed)</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Health Ping Latency:</span>
+            <span class="stat-val font-mono text-cyan" id="statLatency">0 ms</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Route 53 DNS Record:</span>
+            <span class="stat-val font-mono" id="statDns">api.sakshibhalekar.dev</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Route 53 Routing Policy:</span>
+            <span class="stat-val font-mono">Alias A-Record (DualStack)</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Uptime:</span>
+            <span class="stat-val font-mono" id="statUptime">0s</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Last Ping Timestamp:</span>
+            <span class="stat-val font-mono text-muted" id="statLastPing">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Interactive Automation & Testing Console -->
+      <div class="card span-2">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">🛠️</span>
+            <h3>Interactive Testing & Verification Console</h3>
+          </div>
+          <span class="badge badge-blue">REST API Console</span>
+        </div>
+        <div class="card-body">
+          <p class="console-desc">Test real-time endpoints simulating Elastic Beanstalk load balancing, health monitoring, and Auto Scaling triggers:</p>
+          
+          <div class="action-buttons">
+            <button class="btn btn-primary" id="btnTestHealth">
+              <span class="btn-icon">⚡</span> Run /health Ping
+            </button>
+            <button class="btn btn-secondary" id="btnTestInfo">
+              <span class="btn-icon">📊</span> Fetch /api/info
+            </button>
+            <button class="btn btn-warning" id="btnTestStress">
+              <span class="btn-icon">🔥</span> Simulate Load (/api/stress)
+            </button>
+            <button class="btn btn-success" id="btnAddTaskModal">
+              <span class="btn-icon">➕</span> Record Deployment Task
+            </button>
+          </div>
+
+          <div class="console-terminal">
+            <div class="terminal-bar">
+              <div class="terminal-dots">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+              </div>
+              <span class="terminal-title">Live API Output Stream</span>
+              <button class="btn-copy" id="btnClearTerminal">Clear</button>
+            </div>
+            <pre class="terminal-code" id="terminalOutput">// Click any button above to test API endpoints in real-time...</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4: Automated CI/CD & Deployment Tasks Log -->
+      <div class="card span-2">
+        <div class="card-header">
+          <div class="card-title">
+            <span class="card-icon">📋</span>
+            <h3>Deployment Audit & CI/CD Pipeline History</h3>
+          </div>
+          <span class="badge badge-accent" id="taskCountBadge">4 Tasks</span>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Task Title</th>
+                  <th>Status</th>
+                  <th>Timestamp</th>
+                  <th>Description / Verification</th>
+                </tr>
+              </thead>
+              <tbody id="tasksTableBody">
+                <!-- Dynamically populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>AWS Cloud Foundations Week 4 Assignment Submission &bull; Author: <strong>Sakshi Bhalekar</strong></p>
+      <p class="footer-links">
+        <a href="/health" target="_blank">Health Check JSON</a> &bull;
+        <a href="/api/info" target="_blank">API Metadata JSON</a> &bull;
+        <a href="/api/tasks" target="_blank">Tasks JSON</a> &bull;
+        <a href="https://github.com/SakshiBhalekar/week-4" target="_blank">GitHub Repository</a>
+      </p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

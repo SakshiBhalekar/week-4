@@ -1,0 +1,91 @@
+{
+  "pipeline": {
+    "name": "cloud-week4-deployment-pipeline",
+    "roleArn": "arn:aws:iam::123456789012:role/cloud-week4-codepipeline-role",
+    "artifactStore": {
+      "type": "S3",
+      "location": "cloud-week4-pipeline-artifacts-123456789012"
+    },
+    "stages": [
+      {
+        "name": "Source",
+        "actions": [
+          {
+            "name": "GitHub_Source",
+            "actionTypeId": {
+              "category": "Source",
+              "owner": "ThirdParty",
+              "provider": "GitHub",
+              "version": "1"
+            },
+            "runOrder": 1,
+            "configuration": {
+              "Owner": "SakshiBhalekar",
+              "Repo": "week-4",
+              "Branch": "main",
+              "OAuthToken": "{{resolve:secretsmanager:github/token:SecretString:token}}"
+            },
+            "outputArtifacts": [
+              {
+                "name": "SourceArtifact"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Build_And_Test",
+        "actions": [
+          {
+            "name": "CodeBuild_Test_Runner",
+            "actionTypeId": {
+              "category": "Build",
+              "owner": "AWS",
+              "provider": "CodeBuild",
+              "version": "1"
+            },
+            "runOrder": 1,
+            "configuration": {
+              "ProjectName": "cloud-week4-build"
+            },
+            "inputArtifacts": [
+              {
+                "name": "SourceArtifact"
+              }
+            ],
+            "outputArtifacts": [
+              {
+                "name": "BuildArtifact"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Deploy",
+        "actions": [
+          {
+            "name": "ElasticBeanstalk_Deployer",
+            "actionTypeId": {
+              "category": "Deploy",
+              "owner": "AWS",
+              "provider": "ElasticBeanstalk",
+              "version": "1"
+            },
+            "runOrder": 1,
+            "configuration": {
+              "ApplicationName": "cloud-week4-node-app",
+              "EnvironmentName": "cloud-week4-prod-env"
+            },
+            "inputArtifacts": [
+              {
+                "name": "BuildArtifact"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "version": 1
+  }
+}

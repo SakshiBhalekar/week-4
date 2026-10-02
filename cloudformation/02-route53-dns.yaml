@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS Cloud Foundations (Week 4): Route 53 Domain & DNS Automation Stack.
+  Provisions Route 53 Public Hosted Zone, Alias A-Record mapping to Elastic Beanstalk,
+  and Route 53 HTTP Health Check with CloudWatch Alarms.
+  Author: Sakshi Bhalekar
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: sakshibhalekar.dev
+    Description: Root domain name for the Route 53 Hosted Zone.
+
+  SubdomainName:
+    Type: String
+    Default: app.sakshibhalekar.dev
+    Description: Fully qualified domain name (FQDN) for the application endpoint.
+
+  ElasticBeanstalkEndpoint:
+    Type: String
+    Default: cloud-week4-prod-env.eba-xyz.us-east-1.elasticbeanstalk.com
+    Description: Elastic Beanstalk CNAME endpoint or ALB DNS name.
+
+  CreateHostedZone:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Whether to create a new Public Hosted Zone or use an existing one.
+
+  ExistingHostedZoneId:
+    Type: String
+    Default: ''
+    Description: Hosted Zone ID if CreateHostedZone is false.
+
+Conditions:
+  ShouldCreateHostedZone: !Equals [!Ref CreateHostedZone, 'true']
+
+Resources:
+  # =========================================================================
+  # ROUTE 53 HOSTED ZONE
+  # =========================================================================
+  PublicHostedZone:
+    Type: AWS::Route53::HostedZone
+    Condition: ShouldCreateHostedZone
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: !Sub "Managed Public Hosted Zone for ${DomainName} (Author: Sakshi Bhalekar)"
+
+  # =========================================================================
+  # ROUTE 53 DNS RECORD SET
+  # =========================================================================
+  ApplicationDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !If
+        - ShouldCreateHostedZone
+        - !Ref PublicHostedZone
+        - !Ref ExistingHostedZoneId
+      Name: !Ref SubdomainName
+      Type: CNAME
+      TTL: '300'
+      ResourceRecords:
+        - !Ref ElasticBeanstalkEndpoint
+      Comment: !Sub "Route 53 CNAME record pointing ${SubdomainName} to Elastic Beanstalk"
+
+  # =========================================================================
+  # ROUTE 53 HEALTH CHECK
+  # =========================================================================
+  EndpointHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTP
+        FullyQualifiedDomainName: !Ref ElasticBeanstalkEndpoint
+        Port: 80
+        ResourcePath: /health
+        RequestInterval: 30
+        FailureThreshold: 3
+        MeasureLatency: true
+        EnableSNI: false
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub "${SubdomainName}-health-check"
+        - Key: Environment
+          Value: Production
+        - Key: Assignment
+          Value: Cloud-Week-4
+
+  # =========================================================================
+  # CLOUDWATCH ALARM FOR ROUTE 53 HEALTH CHECK
+  # =========================================================================
+  HealthCheckFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${SubdomainName}-Route53-HealthCheck-Failure"
+      AlarmDescription: "Triggers when Route 53 health check reports the application is down"
+      Namespace: AWS/Route53
+      MetricName: HealthCheckStatus
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !Ref EndpointHealthCheck
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+
+Outputs:
+  HostedZoneId:
+    Description: Route 53 Hosted Zone ID
+    Value: !If [ShouldCreateHostedZone, !Ref PublicHostedZone, !Ref ExistingHostedZoneId]
+
+  NameServers:
+    Condition: ShouldCreateHostedZone
+    Description: Authoritative Name Servers for domain delegation at registrar
+    Value: !Join [", ", !GetAtt PublicHostedZone.NameServers]
+
+  ApplicationUrl:
+    Description: Custom Domain Application URL
+    Value: !Sub "http://${SubdomainName}"
+
+  HealthCheckId:
+    Description: Route 53 Health Check ID
+    Value: !Ref EndpointHealthCheck

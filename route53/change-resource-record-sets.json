@@ -1,0 +1,30 @@
+{
+  "Comment": "Upsert Alias A-Record and CNAME for AWS Elastic Beanstalk (Author: Sakshi Bhalekar)",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "api.sakshibhalekar.dev",
+        "Type": "CNAME",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "cloud-week4-prod-env.eba-3v7j49kp.us-east-1.elasticbeanstalk.com"
+          }
+        ]
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "sakshibhalekar.dev",
+        "Type": "A",
+        "AliasTarget": {
+          "HostedZoneId": "Z117KPS5GTRQ2G",
+          "DNSName": "dualstack.cloud-week4-prod-env.eba-3v7j49kp.us-east-1.elasticbeanstalk.com",
+          "EvaluateTargetHealth": true
+        }
+      }
+    }
+  ]
+}

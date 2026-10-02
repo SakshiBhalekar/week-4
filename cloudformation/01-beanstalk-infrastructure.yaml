@@ -1,0 +1,189 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS Cloud Foundations (Week 4): Elastic Beanstalk Infrastructure Stack.
+  Provisions Elastic Beanstalk Application, IAM Service Roles, EC2 Instance Profiles,
+  and Application Load Balanced Environment running Node.js on Amazon Linux 2023.
+  Author: Sakshi Bhalekar
+
+Parameters:
+  ApplicationName:
+    Type: String
+    Default: cloud-week4-node-app
+    Description: Name of the Elastic Beanstalk Application.
+
+  EnvironmentName:
+    Type: String
+    Default: cloud-week4-prod-env
+    Description: Name of the Elastic Beanstalk Environment.
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t2.micro
+    Description: EC2 compute instance type for web tier instances.
+
+  MinInstances:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 10
+    Description: Minimum number of EC2 instances in the Auto Scaling Group.
+
+  MaxInstances:
+    Type: Number
+    Default: 3
+    MinValue: 1
+    MaxValue: 10
+    Description: Maximum number of EC2 instances in the Auto Scaling Group.
+
+  EnvironmentType:
+    Type: String
+    Default: LoadBalanced
+    AllowedValues:
+      - LoadBalanced
+      - SingleInstance
+    Description: Choose between LoadBalanced (Multi-AZ with ALB) or SingleInstance.
+
+  PlatformName:
+    Type: String
+    Default: 64bit Amazon Linux 2023 v6.1.4 running Node.js 20
+    Description: Elastic Beanstalk managed platform solution stack name.
+
+Resources:
+  # =========================================================================
+  # IAM ROLES & INSTANCE PROFILES
+  # =========================================================================
+  ElasticBeanstalkServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-eb-service-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: elasticbeanstalk.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy
+
+  ElasticBeanstalkEc2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-eb-ec2-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
+  ElasticBeanstalkInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${AWS::StackName}-eb-instance-profile"
+      Roles:
+        - !Ref ElasticBeanstalkEc2Role
+
+  # =========================================================================
+  # ELASTIC BEANSTALK APPLICATION & CONFIGURATION
+  # =========================================================================
+  EBApplication:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Ref ApplicationName
+      Description: Week 4 Node.js Production Web Application (Author Sakshi Bhalekar)
+
+  EBConfigTemplate:
+    Type: AWS::ElasticBeanstalk::ConfigurationTemplate
+    Properties:
+      ApplicationName: !Ref EBApplication
+      Description: Default production configuration template for Node.js
+      SolutionStackName: !Ref PlatformName
+      OptionSettings:
+        # Compute & Instance Profile
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: IamInstanceProfile
+          Value: !Ref ElasticBeanstalkInstanceProfile
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: InstanceType
+          Value: !Ref InstanceType
+
+        # Environment Architecture & Scaling
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: EnvironmentType
+          Value: !Ref EnvironmentType
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: ServiceRole
+          Value: !Ref ElasticBeanstalkServiceRole
+        - Namespace: aws:autoscaling:asg
+          OptionName: MinSize
+          Value: !Ref MinInstances
+        - Namespace: aws:autoscaling:asg
+          OptionName: MaxSize
+          Value: !Ref MaxInstances
+
+        # Application Process & Health Checks
+        - Namespace: aws:elasticbeanstalk:environment:process:default
+          OptionName: HealthCheckPath
+          Value: /health
+        - Namespace: aws:elasticbeanstalk:environment:process:default
+          OptionName: Port
+          Value: '80'
+        - Namespace: aws:elasticbeanstalk:environment:process:default
+          OptionName: Protocol
+          Value: HTTP
+
+        # CloudWatch Logging
+        - Namespace: aws:elasticbeanstalk:cloudwatch:logs
+          OptionName: StreamLogs
+          Value: 'true'
+        - Namespace: aws:elasticbeanstalk:cloudwatch:logs
+          OptionName: RetentionInDays
+          Value: '7'
+
+        # Node.js Application Environment Variables
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: PORT
+          Value: '8080'
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: NODE_ENV
+          Value: production
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: APP_VERSION
+          Value: '1.0.0'
+
+  EBEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !Ref EBApplication
+      EnvironmentName: !Ref EnvironmentName
+      TemplateName: !Ref EBConfigTemplate
+      Description: Live production environment serving client traffic
+
+Outputs:
+  ApplicationName:
+    Description: The Elastic Beanstalk Application Name
+    Value: !Ref EBApplication
+
+  EnvironmentName:
+    Description: The Active Elastic Beanstalk Environment Name
+    Value: !Ref EBEnvironment
+
+  EnvironmentEndpointURL:
+    Description: Public CNAME Endpoint URL for the Elastic Beanstalk environment
+    Value: !GetAtt EBEnvironment.EndpointURL
+
+  ServiceRoleArn:
+    Description: IAM Role ARN assigned to Elastic Beanstalk
+    Value: !GetAtt ElasticBeanstalkServiceRole.Arn

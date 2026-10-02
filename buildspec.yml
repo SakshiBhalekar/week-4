@@ -1,0 +1,42 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - echo "=========================================================="
+      - echo " AWS CodeBuild - Week 4 Deployment & Automation Pipeline "
+      - echo " Author: Sakshi Bhalekar                                  "
+      - echo "=========================================================="
+      - echo "Installing application dependencies..."
+      - cd node-app
+      - npm ci
+
+  pre_build:
+    commands:
+      - echo "Executing automated tests and code quality audits..."
+      - npm test
+      - npm run lint
+      - echo "All pre-build test suites passed with 100% success rate."
+
+  build:
+    commands:
+      - echo "Building production deployment bundle for AWS Elastic Beanstalk..."
+      - cd ..
+      - echo "Readying root bundle files..."
+
+  post_build:
+    commands:
+      - echo "Build phase completed successfully on $(date)."
+      - echo "Handing off artifact bundle to AWS Elastic Beanstalk deployment stage."
+
+artifacts:
+  files:
+    - 'node-app/**/*'
+    - 'node-app/.ebextensions/**/*'
+    - 'node-app/.platform/**/*'
+    - 'buildspec.yml'
+  exclude-paths:
+    - 'node-app/node_modules/**/*'
+    - 'node-app/tests/**/*'

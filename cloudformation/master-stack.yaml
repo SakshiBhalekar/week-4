@@ -1,0 +1,242 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS Cloud Foundations (Week 4): Unified Master Deployment Stack.
+  Orchestrates Elastic Beanstalk PaaS, Route 53 DNS automation, CodePipeline CI/CD,
+  and IAM security policies in a single cohesive infrastructure template.
+  Author: Sakshi Bhalekar
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: cloud-week4
+    Description: Prefix applied to all provisioned cloud resources.
+
+  DomainName:
+    Type: String
+    Default: sakshibhalekar.dev
+    Description: Domain name for Route 53 DNS mapping.
+
+  SubdomainName:
+    Type: String
+    Default: api.sakshibhalekar.dev
+    Description: Subdomain pointing to Elastic Beanstalk.
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t2.micro]
+    Description: EC2 instance type for the Web Tier.
+
+  MinInstances:
+    Type: Number
+    Default: 1
+    Description: Minimum instances in Auto Scaling Group.
+
+  MaxInstances:
+    Type: Number
+    Default: 3
+    Description: Maximum instances in Auto Scaling Group.
+
+Resources:
+  # =========================================================================
+  # 1. IAM ROLES & SECURITY POLICIES
+  # =========================================================================
+  EBServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-eb-service-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: elasticbeanstalk.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy
+
+  EBEc2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-eb-ec2-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier
+        - arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
+  EBInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EBEc2Role
+
+  # =========================================================================
+  # 2. ELASTIC BEANSTALK APPLICATION & LOAD-BALANCED ENVIRONMENT
+  # =========================================================================
+  EBApp:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Sub "${ProjectName}-node-app"
+      Description: Week 4 Node.js Production Application (Author: Sakshi Bhalekar)
+
+  EBConfig:
+    Type: AWS::ElasticBeanstalk::ConfigurationTemplate
+    Properties:
+      ApplicationName: !Ref EBApp
+      Description: Production Configuration Template
+      SolutionStackName: 64bit Amazon Linux 2023 v6.1.4 running Node.js 20
+      OptionSettings:
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: IamInstanceProfile
+          Value: !Ref EBInstanceProfile
+        - Namespace: aws:autoscaling:launchconfiguration
+          OptionName: InstanceType
+          Value: !Ref InstanceType
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: EnvironmentType
+          Value: LoadBalanced
+        - Namespace: aws:elasticbeanstalk:environment
+          OptionName: ServiceRole
+          Value: !Ref EBServiceRole
+        - Namespace: aws:autoscaling:asg
+          OptionName: MinSize
+          Value: !Ref MinInstances
+        - Namespace: aws:autoscaling:asg
+          OptionName: MaxSize
+          Value: !Ref MaxInstances
+        - Namespace: aws:elasticbeanstalk:environment:process:default
+          OptionName: HealthCheckPath
+          Value: /health
+        - Namespace: aws:elasticbeanstalk:cloudwatch:logs
+          OptionName: StreamLogs
+          Value: 'true'
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: PORT
+          Value: '8080'
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: NODE_ENV
+          Value: production
+        - Namespace: aws:elasticbeanstalk:application:environment
+          OptionName: APP_DOMAIN
+          Value: !Ref SubdomainName
+
+  EBEnv:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      ApplicationName: !Ref EBApp
+      EnvironmentName: !Sub "${ProjectName}-prod-env"
+      TemplateName: !Ref EBConfig
+
+  # =========================================================================
+  # 3. ROUTE 53 DNS & HEALTH CHECKS
+  # =========================================================================
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: !Sub "Managed Hosted Zone for ${DomainName}"
+
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Ref SubdomainName
+      Type: CNAME
+      TTL: '300'
+      ResourceRecords:
+        - !GetAtt EBEnv.EndpointURL
+
+  HealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: HTTP
+        FullyQualifiedDomainName: !GetAtt EBEnv.EndpointURL
+        Port: 80
+        ResourcePath: /health
+        RequestInterval: 30
+        FailureThreshold: 3
+
+  # =========================================================================
+  # 4. CI/CD: S3 ARTIFACTS & CODEPIPELINE
+  # =========================================================================
+  PipelineArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictBuckets: true
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildLogging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub "${PipelineArtifactBucket.Arn}/*"
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${ProjectName}-build"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec.yml
+
+Outputs:
+  ElasticBeanstalkURL:
+    Description: Elastic Beanstalk Environment URL
+    Value: !GetAtt EBEnv.EndpointURL
+
+  CustomDomainURL:
+    Description: Route 53 Custom Domain URL
+    Value: !Sub "http://${SubdomainName}"
+
+  NameServers:
+    Description: Route 53 Name Servers
+    Value: !Join [", ", !GetAtt HostedZone.NameServers]
+
+  HealthCheckId:
+    Description: Route 53 Health Check ID
+    Value: !Ref HealthCheck
